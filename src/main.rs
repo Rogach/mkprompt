@@ -3,6 +3,8 @@ extern crate clap;
 use clap::{App, Arg, AppSettings};
 use std::env;
 use std::path::{PathBuf};
+use std::fs;
+use std::os::linux::fs::MetadataExt;
 
 fn main() {
     let app = App::new("mkprompt")
@@ -18,5 +20,8 @@ fn main() {
         None => env::current_dir().unwrap()
     }.canonicalize().unwrap();
 
-    println!("{:?}", path);
+    let root_filesystem_dev = fs::metadata("/").unwrap().st_dev();
+    let path_filesystem_dev = fs::metadata(path).unwrap().st_dev();
+    let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
+    println!("{:?}", on_root_filesystem);
 }
