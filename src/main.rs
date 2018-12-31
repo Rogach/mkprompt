@@ -27,7 +27,14 @@ fn main() {
     let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
 
     if on_root_filesystem {
-        if let Ok(git_repo) = Repository::discover(path.clone()) {
+        if let Ok(mut git_repo) = Repository::discover(path.clone()) {
+
+            let mut stash_count = 0;
+            git_repo.stash_foreach(|_idx, _name, _oid| {
+                stash_count += 1;
+                true
+            }).unwrap();
+            println!("stash count: {}", stash_count);
 
             let head = git_repo.head().unwrap();
             let branch_opt = if head.is_branch() {
