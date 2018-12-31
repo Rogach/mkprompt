@@ -30,11 +30,17 @@ fn main() {
         if let Ok(git_repo) = Repository::discover(path.clone()) {
 
             let head = git_repo.head().unwrap();
-            let branch_name_opt: Option<String> = if head.is_branch() {
-                Branch::wrap(head).name().unwrap().map(|s| s.to_owned())
+            let branch_opt = if head.is_branch() {
+                Some(Branch::wrap(head))
             } else {
                 None
             };
+            let branch_name_opt: Option<String> =
+                if let Some(branch) = &branch_opt {
+                    branch.name().unwrap().map(|s| s.to_owned())
+                } else {
+                    None
+                };
 
             let statuses = git_repo.statuses(
                 Some(StatusOptions::new()
@@ -59,7 +65,17 @@ fn main() {
                 Status::WT_RENAMED |
                 Status::WT_TYPECHANGE
             );
-            println!("{:?}, {:?}", has_staged_changes, has_unstaged_changes);
+
+            if let Some(branch) = branch_opt {
+                if let Ok(remote_branch) = branch.upstream() {
+                    if let Some(branch_oid) = branch.get().target() {
+                        if let Some(remote_branch_oid) = remote_branch.get().target() {
+                            let (ahead, behind) = git_repo.graph_ahead_behind(branch_oid, remote_branch_oid).unwrap();
+                            println!("{}, {}", ahead, behind);
+                        }
+                    }
+                }
+            }
         }
     }
 }
