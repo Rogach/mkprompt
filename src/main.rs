@@ -41,6 +41,7 @@ fn main() {
                 } else {
                     None
                 };
+            println!("branch name: {:?}", branch_name_opt);
 
             let statuses = git_repo.statuses(
                 Some(StatusOptions::new()
@@ -65,6 +66,7 @@ fn main() {
                 Status::WT_RENAMED |
                 Status::WT_TYPECHANGE
             );
+            println!("has_staged_changes = {}, has_unstaged_changes = {}", has_staged_changes, has_unstaged_changes);
 
             if let Some(branch) = branch_opt {
                 if let Ok(remote_branch) = branch.upstream() {
