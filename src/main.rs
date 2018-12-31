@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate git2;
+extern crate hostname;
 
 use clap::{App, Arg, AppSettings};
 use std::env;
@@ -7,6 +8,7 @@ use std::path::{PathBuf};
 use std::fs;
 use std::os::linux::fs::MetadataExt;
 use git2::{Repository, Branch, StatusOptions, Status};
+use hostname::get_hostname;
 
 fn main() {
     let app = App::new("mkprompt")
@@ -87,4 +89,6 @@ fn main() {
             }
         }
     }
+
+    println!("{:?}", get_hostname());
 }
