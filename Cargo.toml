@@ -4,13 +4,9 @@ version = "0.1.0"
 authors = ["Rogach <platon7pronko@gmail.com>"]
 edition = "2018"
 
-# [profile.release]
-# lto = true
-
 [dependencies]
 clap = "2.32.0"
 git2 = "0.8.0"
-hostname = "0.1.5"
 
 [dev-dependencies]
 criterion = "0.2.7"

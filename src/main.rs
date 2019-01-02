@@ -1,14 +1,23 @@
 extern crate clap;
 extern crate git2;
-extern crate hostname;
 
 use clap::{App, Arg, AppSettings};
 use std::env;
 use std::path::{PathBuf};
 use std::fs;
 use std::os::linux::fs::MetadataExt;
+use std::process::{Command};
 use git2::{Repository, Branch, StatusOptions, Status};
-use hostname::get_hostname;
+
+static COLOR_RED: &str = "\\[\\033[0;31m\\]";
+static COLOR_CYAN: &str = "\\[\\033[0;1;36m\\]";
+static COLOR_DARK_CYAN: &str = "\\[\\033[0;36m\\]";
+static COLOR_YELLOW: &str = "\\[\\033[0;33m\\]";
+static COLOR_GREEN: &str = "\\[\\033[0;32m\\]";
+static COLOR_LIGHT_GREEN: &str = "\\[\\033[1;32m\\]";
+static COLOR_LIGHT_BLUE: &str = "\\[\\033[1;34m\\]";
+static COLOR_NONE: &str = "\\[\\033[0m\\]";
+static COLOR_HOSTNAME: &str = "\\[\\033[38;5;28m\\]";
 
 fn main() {
     let app = App::new("mkprompt")
@@ -28,67 +37,139 @@ fn main() {
     let path_filesystem_dev = fs::metadata(path.clone()).unwrap().st_dev();
     let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
 
-    if on_root_filesystem {
-        if let Ok(mut git_repo) = Repository::discover(path.clone()) {
+    let git_prompt =
+        if on_root_filesystem {
+            get_git_prompt(&path)
+        } else {
+            "".into()
+        };
 
-            let mut stash_count = 0;
-            git_repo.stash_foreach(|_idx, _name, _oid| {
-                stash_count += 1;
-                true
-            }).unwrap();
-            println!("stash count: {}", stash_count);
+    let sudo_available =
+        Command::new(format!("{}/bin/checksudo", env::var("HOME").unwrap()))
+        .status()
+        .unwrap();
 
-            let head = git_repo.head().unwrap();
-            let branch_opt = if head.is_branch() {
-                Some(Branch::wrap(head))
+    println!("{}", [
+        COLOR_LIGHT_GREEN.into(),
+        "\\u".into(),
+        if sudo_available.success() {
+            format!("{}!", COLOR_RED)
+        } else {
+            format!("{}@", COLOR_HOSTNAME)
+        },
+        COLOR_HOSTNAME.into(),
+        "\\h ".into(),
+        COLOR_LIGHT_BLUE.into(),
+        path.to_str().unwrap().into(),
+        COLOR_NONE.into(),
+        " ".into(),
+        git_prompt,
+        "\\n".into(),
+        "$ ".into(),
+        COLOR_NONE.into()
+    ].concat());
+}
+
+fn get_git_prompt(path: &PathBuf) -> String {
+    if let Ok(mut git_repo) = Repository::discover(path) {
+
+        let mut stash_count = 0;
+        git_repo.stash_foreach(|_idx, _name, _oid| {
+            stash_count += 1;
+            true
+        }).unwrap();
+
+        let head = git_repo.head().unwrap();
+        let branch_opt = if head.is_branch() {
+            Some(Branch::wrap(head))
+        } else {
+            None
+        };
+        let branch_name_opt: Option<String> =
+            if let Some(branch) = &branch_opt {
+                branch.name().unwrap().map(|s| s.to_owned())
             } else {
                 None
             };
-            let branch_name_opt: Option<String> =
-                if let Some(branch) = &branch_opt {
-                    branch.name().unwrap().map(|s| s.to_owned())
-                } else {
-                    None
-                };
-            println!("branch name: {:?}", branch_name_opt);
 
-            let statuses = git_repo.statuses(
-                Some(StatusOptions::new()
-                     .include_untracked(true)
-                     .include_unmodified(false)
-                     .renames_head_to_index(false)
-                     .renames_index_to_workdir(false))
-            ).unwrap();
+        let statuses = git_repo.statuses(
+            Some(StatusOptions::new()
+                 .include_untracked(true)
+                 .include_unmodified(false)
+                 .renames_head_to_index(false)
+                 .renames_index_to_workdir(false))
+        ).unwrap();
 
-            let aggregate_status = statuses.iter().fold(Status::empty(), |acc, se| acc | se.status());
-            let has_staged_changes = aggregate_status.intersects(
-                Status::INDEX_NEW |
-                Status::INDEX_MODIFIED |
-                Status::INDEX_DELETED |
-                Status::INDEX_RENAMED |
-                Status::INDEX_TYPECHANGE
-            );
-            let has_unstaged_changes = aggregate_status.intersects(
-                Status::WT_NEW |
-                Status::WT_MODIFIED |
-                Status::WT_DELETED |
-                Status::WT_RENAMED |
-                Status::WT_TYPECHANGE
-            );
-            println!("has_staged_changes = {}, has_unstaged_changes = {}", has_staged_changes, has_unstaged_changes);
+        let aggregate_status = statuses.iter().fold(Status::empty(), |acc, se| acc | se.status());
+        let has_staged_changes = aggregate_status.intersects(
+            Status::INDEX_NEW |
+            Status::INDEX_MODIFIED |
+            Status::INDEX_DELETED |
+            Status::INDEX_RENAMED |
+            Status::INDEX_TYPECHANGE
+        );
+        let has_unstaged_changes = aggregate_status.intersects(
+            Status::WT_NEW |
+            Status::WT_MODIFIED |
+            Status::WT_DELETED |
+            Status::WT_RENAMED |
+            Status::WT_TYPECHANGE
+        );
 
-            if let Some(branch) = branch_opt {
+        let (ahead, behind) =
+            if let Some(branch) = &branch_opt {
                 if let Ok(remote_branch) = branch.upstream() {
                     if let Some(branch_oid) = branch.get().target() {
                         if let Some(remote_branch_oid) = remote_branch.get().target() {
-                            let (ahead, behind) = git_repo.graph_ahead_behind(branch_oid, remote_branch_oid).unwrap();
-                            println!("{}, {}", ahead, behind);
+                            git_repo.graph_ahead_behind(branch_oid, remote_branch_oid).unwrap()
+                        } else {
+                            (0, 0)
                         }
+                    } else {
+                        (0, 0)
                     }
+                } else {
+                    (0, 0)
                 }
-            }
-        }
-    }
+            } else {
+                (0, 0)
+            };
 
-    println!("{:?}", get_hostname());
+        [
+            if branch_opt.is_none() {
+                COLOR_RED.into()
+            } else if has_unstaged_changes {
+                if has_staged_changes {
+                    COLOR_YELLOW.into()
+                } else {
+                    COLOR_CYAN.into()
+                }
+            } else {
+                if has_staged_changes {
+                    COLOR_DARK_CYAN.into()
+                } else {
+                    COLOR_GREEN.into()
+                }
+            },
+            String::from("("),
+            branch_name_opt.unwrap_or("detached".into()),
+            String::from(")"),
+            if ahead > 0 && behind == 0 {
+                format!("{} ↑↑", COLOR_GREEN)
+            } else if ahead == 0 && behind > 0 {
+                format!("{} ↓↓↓↓", COLOR_RED)
+            } else {
+                "".into()
+            },
+            COLOR_RED.into(),
+            if stash_count > 0 {
+                stash_count.to_string()
+            } else {
+                "".into()
+            },
+            COLOR_NONE.into(),
+        ].concat()
+    } else {
+        "".into()
+    }
 }
