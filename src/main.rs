@@ -1,31 +1,32 @@
 extern crate clap;
 extern crate git2;
+#[macro_use] extern crate failure;
 
 use clap::{App, Arg, AppSettings};
 use std::env;
-use std::path::{PathBuf};
+use std::path::{PathBuf, Component};
 use std::fs;
 use std::os::linux::fs::MetadataExt;
 use std::process::{Command};
 use std::process::exit;
-use std::io;
+use failure::Error;
 use git2::{Repository, Branch, StatusOptions, Status};
 
 static COLOR_RED: &str = "\\[\\033[0;31m\\]";
-static COLOR_CYAN: &str = "\\[\\033[0;1;36m\\]";
-static COLOR_DARK_CYAN: &str = "\\[\\033[0;36m\\]";
-static COLOR_YELLOW: &str = "\\[\\033[0;33m\\]";
 static COLOR_GREEN: &str = "\\[\\033[0;32m\\]";
 static COLOR_LIGHT_GREEN: &str = "\\[\\033[1;32m\\]";
+static COLOR_YELLOW: &str = "\\[\\033[0;33m\\]";
+static COLOR_BLUE: &str = "\\[\\033[0;34m\\]";
 static COLOR_LIGHT_BLUE: &str = "\\[\\033[1;34m\\]";
+static COLOR_CYAN: &str = "\\[\\033[0;1;36m\\]";
+static COLOR_DARK_CYAN: &str = "\\[\\033[0;36m\\]";
 static COLOR_NONE: &str = "\\[\\033[0m\\]";
 static COLOR_HOSTNAME: &str = "\\[\\033[38;5;28m\\]";
 
-static FALLBACK_PROMPT: &str = "\\[\\033[0m\\]\\u@\\h \\w\\n$ ";
+static FALLBACK_PROMPT: &str = "\\[\\033[0m\\]\\u@\\h \\w";
+static PWD_LENGTH_LIMIT: usize = 40;
 
-fn exit_with_fallback<E>(err: E) -> !
-    where E: std::error::Error  {
-
+fn exit_with_fallback(err: Error) -> ! {
     eprintln!("{}", err);
     println!("{}", FALLBACK_PROMPT);
     exit(1)
@@ -42,20 +43,15 @@ fn main() {
 
     let path = match matches.value_of("PATH") {
         Some(p) => PathBuf::from(p),
-        None => env::current_dir().unwrap_or_else(|e| exit_with_fallback(e))
-    }.canonicalize().unwrap_or_else(|e| exit_with_fallback(e));
+        None => env::current_dir().unwrap_or_else(|e| exit_with_fallback(e.into()))
+    }.canonicalize().unwrap_or_else(|e| exit_with_fallback(e.into()));
 
-    let path_str = path.to_str().unwrap_or_else(
-        || exit_with_fallback(io::Error::new(
-            io::ErrorKind::Other,
-            "unable to convert path to string"
-        ))
-    );
+    let path_str = mkpwd(&path).unwrap_or_else(|e| exit_with_fallback(e.into()));
 
     let root_filesystem_dev =
-        fs::metadata("/").unwrap_or_else(|e| exit_with_fallback(e)).st_dev();
+        fs::metadata("/").unwrap_or_else(|e| exit_with_fallback(e.into())).st_dev();
     let path_filesystem_dev =
-        fs::metadata(path.clone()).unwrap_or_else(|e| exit_with_fallback(e)).st_dev();
+        fs::metadata(path.clone()).unwrap_or_else(|e| exit_with_fallback(e.into())).st_dev();
     let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
 
     let git_prompt =
@@ -82,10 +78,7 @@ fn main() {
         path_str.into(),
         COLOR_NONE.into(),
         " ".into(),
-        git_prompt,
-        "\\n".into(),
-        "$ ".into(),
-        COLOR_NONE.into()
+        git_prompt
     ].concat());
 }
 
@@ -211,4 +204,68 @@ fn is_sudo_available() -> bool {
             }
         }
     }
+}
+
+fn mkpwd(path: &PathBuf) -> Result<String, Error> {
+    let home = PathBuf::from(env::var("HOME")?);
+
+    let mut remaining_length = path_length(path)?;
+    let mut remaining_limit = PWD_LENGTH_LIMIT;
+    let mut pwd = String::new();
+    let mut under_limit = false;
+
+    pwd.push_str(COLOR_BLUE);
+
+    let path_components =
+        if path.starts_with(&home) {
+            remaining_limit -= 1;
+            remaining_length -= path_length(&home)?;
+
+            if !under_limit && remaining_length <= remaining_limit {
+                pwd.push_str(COLOR_LIGHT_BLUE);
+                under_limit = true;
+            }
+            pwd.push_str("~");
+
+            path.components().skip((&home).components().count())
+        } else {
+            path.components().skip(0)
+        };
+
+
+    for c in path_components {
+        let cs = c.as_os_str().to_str().ok_or(format_err!("unable to convert path to string"))?;
+        if remaining_length > remaining_limit {
+            remaining_limit -= 2;
+            remaining_length -= cs.len() + 1;
+            pwd.push_str("/");
+            pwd.push_str(&cs.chars().take(1).collect::<String>());
+        } else {
+            if !under_limit {
+                pwd.push_str(COLOR_LIGHT_BLUE);
+                under_limit = true;
+            }
+            remaining_limit -= cs.len() + 1;
+            remaining_length -= cs.len() + 1;
+            pwd.push_str("/");
+            pwd.push_str(cs);
+        }
+    }
+
+    Ok(pwd)
+}
+
+fn path_length(path: &PathBuf) -> Result<usize, Error> {
+    let mut length = 0;
+    for c in path.components() {
+        match c {
+            Component::RootDir => {},
+            Component::Normal(s) => {
+                length +=
+                    s.to_str().ok_or(format_err!("unable to convert path to string"))?.len() + 1;
+            },
+            pp => return Err(format_err!("unexpected path part: {:?}", pp))
+        }
+    }
+    Ok(length)
 }
