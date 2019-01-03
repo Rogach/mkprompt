@@ -83,6 +83,9 @@ fn main() {
 
 fn get_git_prompt(path: &PathBuf) -> Result<String, git2::Error> {
     if let Ok(mut git_repo) = Repository::discover(path) {
+        if git_repo.is_bare() {
+            return Ok([COLOR_RED, "(bare repository)", COLOR_NONE].concat());
+        }
 
         let mut stash_count = 0;
         git_repo.stash_foreach(|_idx, _name, _oid| {
