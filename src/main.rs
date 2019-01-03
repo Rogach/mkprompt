@@ -74,7 +74,6 @@ fn main() {
         },
         COLOR_HOSTNAME.into(),
         "\\h ".into(),
-        COLOR_LIGHT_BLUE.into(),
         path_str.into(),
         COLOR_NONE.into(),
         " ".into(),
@@ -234,22 +233,46 @@ fn mkpwd(path: &PathBuf) -> Result<String, Error> {
 
 
     for c in path_components {
-        let cs = c.as_os_str().to_str().ok_or(format_err!("unable to convert path to string"))?;
-        if remaining_length > remaining_limit {
-            remaining_limit -= 2;
-            remaining_length -= cs.len() + 1;
-            pwd.push_str("/");
-            pwd.push_str(&cs.chars().take(1).collect::<String>());
-        } else {
-            if !under_limit {
-                pwd.push_str(COLOR_LIGHT_BLUE);
-                under_limit = true;
-            }
-            remaining_limit -= cs.len() + 1;
-            remaining_length -= cs.len() + 1;
-            pwd.push_str("/");
-            pwd.push_str(cs);
-        }
+        match c {
+            Component::RootDir => {
+                if remaining_length <= remaining_limit {
+                    if !under_limit {
+                        pwd.push_str(COLOR_LIGHT_BLUE);
+                        under_limit = true;
+                    }
+                }
+                remaining_limit -= 1;
+                remaining_length -= 1;
+                pwd.push_str("/");
+            },
+            Component::Normal(s) => {
+                let cs = s.to_str().ok_or(format_err!("unable to convert path to string"))?;
+                if remaining_length > remaining_limit {
+                    if !pwd.ends_with("/") {
+                        remaining_limit -= 1;
+                        remaining_length -= 1;
+                        pwd.push_str("/");
+                    }
+                    remaining_limit -= 1;
+                    remaining_length -= cs.len();
+                    pwd.push_str(&cs.chars().take(1).collect::<String>());
+                } else {
+                    if !under_limit {
+                        pwd.push_str(COLOR_LIGHT_BLUE);
+                        under_limit = true;
+                    }
+                    if !pwd.ends_with("/") {
+                        remaining_limit -= 1;
+                        remaining_length -= 1;
+                        pwd.push_str("/");
+                    }
+                    remaining_limit -= cs.len();
+                    remaining_length -= cs.len();
+                    pwd.push_str(cs);
+                }
+            },
+            pp => return Err(format_err!("unexpected path part: {:?}", pp))
+        };
     }
 
     Ok(pwd)
@@ -266,6 +289,9 @@ fn path_length(path: &PathBuf) -> Result<usize, Error> {
             },
             pp => return Err(format_err!("unexpected path part: {:?}", pp))
         }
+    }
+    if path.is_absolute() && length == 0 {
+        length += 1;
     }
     Ok(length)
 }
