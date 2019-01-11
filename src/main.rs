@@ -13,6 +13,7 @@ use failure::Error;
 use git2::{Repository, Branch, StatusOptions, Status};
 
 static COLOR_RED: &str = "\\[\\033[0;31m\\]";
+static COLOR_LIGHT_RED: &str = "\\[\\033[1;31m\\]";
 static COLOR_GREEN: &str = "\\[\\033[0;32m\\]";
 static COLOR_LIGHT_GREEN: &str = "\\[\\033[1;32m\\]";
 static COLOR_YELLOW: &str = "\\[\\033[0;33m\\]";
@@ -68,7 +69,7 @@ fn main() {
         COLOR_LIGHT_GREEN.into(),
         "\\u".into(),
         if is_sudo_available() {
-            format!("{}!", COLOR_RED)
+            format!("{}!", COLOR_LIGHT_RED)
         } else {
             format!("{}@", COLOR_HOSTNAME)
         },
