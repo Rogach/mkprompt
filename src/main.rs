@@ -181,7 +181,7 @@ fn get_git_prompt(path: &PathBuf) -> Result<String, git2::Error> {
             },
             COLOR_RED.into(),
             if stash_count > 0 {
-                stash_count.to_string()
+                format!(" ({})", stash_count)
             } else {
                 "".into()
             },
