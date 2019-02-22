@@ -222,7 +222,7 @@ fn mkpwd(path: &PathBuf) -> Result<String, Error> {
 
     pwd.push_str(COLOR_BLUE);
 
-    let path_components =
+    let path_components: Vec<Component> =
         if path.starts_with(&home) {
             remaining_limit -= 1;
             remaining_length -= path_length(&home)?;
@@ -233,13 +233,13 @@ fn mkpwd(path: &PathBuf) -> Result<String, Error> {
             }
             pwd.push_str("~");
 
-            path.components().skip((&home).components().count())
+            path.components().skip((&home).components().count()).collect()
         } else {
-            path.components().skip(0)
+            path.components().skip(0).collect()
         };
 
 
-    for c in path_components {
+    for (i, c) in path_components.iter().enumerate() {
         match c {
             Component::RootDir => {
                 if remaining_length <= remaining_limit {
@@ -254,7 +254,8 @@ fn mkpwd(path: &PathBuf) -> Result<String, Error> {
             },
             Component::Normal(s) => {
                 let cs = s.to_str().ok_or(format_err!("unable to convert path to string"))?;
-                if remaining_length > remaining_limit {
+                let is_last_component = i == path_components.len() - 1;
+                if !is_last_component && remaining_length > remaining_limit {
                     if !pwd.ends_with("/") {
                         remaining_limit -= 1;
                         remaining_length -= 1;
