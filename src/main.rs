@@ -55,12 +55,8 @@ fn main() {
         fs::metadata(path.clone()).unwrap_or_else(|e| exit_with_fallback(e.into())).st_dev();
     let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
 
-    let skip_git =
-        !on_root_filesystem ||
-        env::var("MKPROMPT_SKIP_GIT").unwrap_or(String::from("")).split(":").any(|s| !s.is_empty() && path.starts_with(PathBuf::from(s)));
-
     let git_prompt =
-        if skip_git {
+        if !on_root_filesystem {
             "".into()
         } else {
             get_git_prompt(&path).unwrap_or_else(|err| {
@@ -88,6 +84,11 @@ fn main() {
 
 fn get_git_prompt(path: &PathBuf) -> Result<String, git2::Error> {
     if let Ok(mut git_repo) = Repository::discover(path) {
+        let skip_git = env::var("MKPROMPT_SKIP_GIT").unwrap_or(String::from("")).split(":").any(|s| !s.is_empty() && path.starts_with(PathBuf::from(s)));
+        if skip_git {
+            return Ok([COLOR_YELLOW, "git repo", COLOR_NONE].concat());
+        }
+
         if git_repo.is_empty()? {
             return Ok([COLOR_RED, "(empty)", COLOR_NONE].concat());
         }
