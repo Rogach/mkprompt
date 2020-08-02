@@ -55,14 +55,18 @@ fn main() {
         fs::metadata(path.clone()).unwrap_or_else(|e| exit_with_fallback(e.into())).st_dev();
     let on_root_filesystem = root_filesystem_dev == path_filesystem_dev;
 
+    let skip_git =
+        !on_root_filesystem ||
+        env::var("MKPROMPT_SKIP_GIT").unwrap_or(String::from("")).split(":").any(|s| !s.is_empty() && path.starts_with(PathBuf::from(s)));
+
     let git_prompt =
-        if on_root_filesystem {
+        if skip_git {
+            "".into()
+        } else {
             get_git_prompt(&path).unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 String::new()
             })
-        } else {
-            "".into()
         };
 
     println!("{}", [
