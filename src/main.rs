@@ -65,6 +65,13 @@ fn main() {
             })
         };
 
+    let disable_history_prompt =
+        if env::var("DISABLE_HISTORY").unwrap_or(String::from("")) == "true" {
+            [" ".into(), COLOR_RED, "disable-history", COLOR_NONE].concat()
+        } else {
+            "".into()
+        };
+
     println!("{}", [
         COLOR_LIGHT_GREEN.into(),
         "\\u".into(),
@@ -77,8 +84,8 @@ fn main() {
         "\\h ".into(),
         path_str.into(),
         COLOR_NONE.into(),
-        " ".into(),
-        git_prompt
+        git_prompt,
+        disable_history_prompt,
     ].concat());
 }
 
@@ -159,6 +166,7 @@ fn get_git_prompt(path: &PathBuf) -> Result<String, git2::Error> {
             };
 
         Ok([
+            " ".into(),
             if branch_opt.is_none() {
                 COLOR_RED.into()
             } else if has_unstaged_changes {
