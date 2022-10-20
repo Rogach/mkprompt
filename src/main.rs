@@ -97,10 +97,10 @@ fn get_git_prompt(path: &PathBuf) -> Result<String, git2::Error> {
         }
 
         if git_repo.is_empty()? {
-            return Ok([COLOR_RED, "(empty)", COLOR_NONE].concat());
+            return Ok([COLOR_RED, " (empty)", COLOR_NONE].concat());
         }
         if git_repo.is_bare() {
-            return Ok([COLOR_RED, "(bare repository)", COLOR_NONE].concat());
+            return Ok([COLOR_RED, " (bare repository)", COLOR_NONE].concat());
         }
 
         let mut stash_count = 0;
